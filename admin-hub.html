@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu do Admin - Presença Digital</title>
+    <style>
+        /* (Seu CSS está perfeito, apenas adicionei o novo botão) */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .app-container { width: 90%; max-width: 400px; background-color: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; box-sizing: border-box; text-align: center; }
+        h2 { color: #333; margin-top: 0; }
+        p { font-size: 1.1em; color: #555; margin-bottom: 24px; }
+        .menu-button { display: block; width: 100%; padding: 15px; font-size: 16px; border-radius: 8px; border: none; box-sizing: border-box; text-decoration: none; color: white; font-weight: 700; cursor: pointer; transition: background-color 0.2s; margin-bottom: 12px; }
+        
+        #btn-iniciar-aula { background-color: #007bff; /* Azul */ }
+        #btn-iniciar-aula:hover { background-color: #0056b3; }
+        
+        #btn-ver-relatorio { background-color: #28a745; /* Verde */ }
+        #btn-ver-relatorio:hover { background-color: #218838; }
+
+        #btn-registrar-aluno { background-color: #6c757d; /* Cinza */ }
+        #btn-registrar-aluno:hover { background-color: #5a6268; }
+
+        /* [NOVO] Estilo para o botão de Gerenciar */
+        #btn-manage-events {
+            background-color: #ffc107; /* Amarelo */
+            color: #212529;
+        }
+        #btn-manage-events:hover {
+            background-color: #e0a800;
+        }
+
+        #btn-logout { background-color: #dc3545; /* Vermelho */ margin-top: 20px; }
+        #btn-logout:hover { background-color: #c82333; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <h2>Menu do Administrador</h2>
+        <p>O que você gostaria de fazer?</p>
+        
+        <a href="/" id="btn-iniciar-aula" class="menu-button">Iniciar Nova Aula</a>
+        <a href="/dashboard" id="btn-ver-relatorio" class="menu-button">Ver Relatórios de Alunos</a>
+        <a href="/register-student" id="btn-registrar-aluno" class="menu-button">Registrar Novo Aluno</a>
+        
+        <a href="/manage-events" id="btn-manage-events" class="menu-button">Gerenciar Aulas Ativas</a>
+        
+        <button id="btn-logout" class="menu-button">Sair (Logout)</button>
+    </div>
+
+    <script>
+        // --- "PORTEIRO" DE SEGURANÇA ---
+        const authToken = localStorage.getItem('authToken');
+        const userRole = localStorage.getItem('userRole');
+
+        if (!authToken || (userRole !== 'admin' && userRole !== 'Docente')) {
+            alert('Acesso negado. Por favor, faça o login como admin.');
+            window.location.href = '/login';
+        }
+
+        // --- FUNÇÃO DE LOGOUT ---
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userRole');
+            localStorage.removeItem('userId'); 
+            window.location.href = '/login';
+        });
+    </script>
+</body>
+</html>

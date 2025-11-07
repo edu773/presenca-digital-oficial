@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrar Aluno - Presença Digital</title>
+    <style>
+        /* (Seu CSS está perfeito, permanece o mesmo) */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding-top: 20px; padding-bottom: 20px;}
+        .app-container { width: 90%; max-width: 400px; background-color: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; box-sizing: border-box; }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
+        /* [MUDANÇA] Aplicando a 'select' também */
+        input, select, button { 
+            width: 100%; 
+            padding: 12px; 
+            font-size: 16px; 
+            border-radius: 8px; 
+            border: 1px solid #ccc; 
+            box-sizing: border-box; 
+        }
+        input, select { margin-bottom: 10px; } /* [MUDANÇA] Aplicando a 'select' */
+        button { background-color: #007bff; color: white; font-weight: 700; border: none; cursor: pointer; margin-top: 10px; }
+        button:hover { background-color: #0056b3; }
+        
+        /* Navegação */
+        nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        nav a { text-decoration: none; color: #007bff; font-weight: 600; font-size: 0.9em; }
+        #btn-logout { background-color: transparent; color: #dc3545; padding: 4px 8px; font-size: 0.9em; width: auto; border: 1px solid #dc3545; margin-top: 0; }
+        #btn-logout:hover { background-color: #dc3545; color: white; }
+        
+        #register-status { text-align: center; margin-top: 10px; font-weight: 600; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <nav>
+            <a href="/admin-hub">&larr; Voltar ao Menu</a>
+            <button id="btn-logout">Sair</button>
+        </nav>
+        
+        <h2>Registrar Novo Aluno</h2>
+        <form id="register-form">
+            <div class="form-group">
+                <label for="reg-nome">Nome Completo:</label>
+                <input type="text" id="reg-nome" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="reg-turma">Turma:</label>
+                <select id="reg-turma" required>
+                    <option value="">Carregando turmas...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="reg-matricula">Matrícula:</label>
+                <input type="text" id="reg-matricula" required>
+            </div>
+            <div class="form-group">
+                <label for="reg-email">Email:</label>
+                <input type="email" id="reg-email" required>
+            </div>
+            <div class="form-group">
+                <label for="reg-password">Senha Temporária:</label>
+                <input type="password" id="reg-password" required>
+            </div>
+            <button type="submit">Registrar Aluno</button>
+        </form>
+        <div id="register-status"></div>
+    </div>
+
+    <script>
+        // --- "PORTEIRO" DE SEGURANÇA ---
+        const authToken = localStorage.getItem('authToken');
+        const userRole = localStorage.getItem('userRole');
+
+        if (!authToken || (userRole !== 'admin' && userRole !== 'Docente')) {
+            alert('Acesso negado. Por favor, faça o login como admin.');
+            window.location.href = '/login';
+        }
+        
+        // --- FUNÇÃO GERAL DE FETCH ---
+        async function fetchData(endpoint, options = {}) {
+            const fetchOptions = {
+                method: options.method || 'GET',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    ...options.headers
+                },
+                body: options.body
+            };
+            const response = await fetch(endpoint, fetchOptions);
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    alert('Sessão expirada ou sem permissão.');
+                    window.location.href = '/login'; 
+                }
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Erro ${response.status}`);
+            }
+            return response.json();
+        }
+
+        // --- FUNÇÃO DE LOGOUT ---
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userRole');
+            localStorage.removeItem('userId'); 
+            window.location.href = '/login';
+        });
+
+        // --- FUNÇÃO PARA CARREGAR AS TURMAS NO DROPDOWN ---
+        async function carregarTurmas() {
+            try {
+                // 1. Busca as turmas na API (que já existe e funciona)
+                const turmas = await fetchData('/api/turmas');
+                const select = document.getElementById('reg-turma');
+                select.innerHTML = '<option value="">Selecione a turma</option>';
+                
+                // 2. Preenche o menu <select>
+                turmas.forEach(turma => {
+                    const option = document.createElement('option');
+                    option.value = turma.id; // O valor é o ID
+                    option.textContent = turma.nome; // O texto é o Nome
+                    select.appendChild(option);
+                });
+
+            } catch (error) {
+                console.error("Falha ao carregar turmas:", error);
+                document.getElementById('reg-turma').innerHTML = '<option value="">Erro ao carregar</option>';
+            }
+        }
+        
+        // --- FUNÇÃO DE REGISTRO (Atualizada) ---
+        const registerForm = document.getElementById('register-form');
+        const statusMsg = document.getElementById('register-status');
+
+        registerForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); 
+            statusMsg.textContent = "Registrando...";
+            statusMsg.className = "";
+            
+            const nome = document.getElementById('reg-nome').value;
+            const matricula = document.getElementById('reg-matricula').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            const turma_id = document.getElementById('reg-turma').value; 
+
+            // Validação simples
+            if (!turma_id) {
+                statusMsg.textContent = "Por favor, selecione uma turma.";
+                statusMsg.className = "error";
+                return;
+            }
+
+            try {
+                // (Chama a API POST /api/alunos, que vamos atualizar no index.js)
+                const novoAluno = await fetchData('/api/alunos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nome, matricula, email, password, turma_id: parseInt(turma_id) })
+                });
+
+                statusMsg.textContent = `SUCESSO! Aluno "${novoAluno.nome}" registrado.`;
+                statusMsg.className = "success";
+                
+                // Limpa o formulário
+                registerForm.reset();
+                // Reseta o dropdown de turma
+                document.getElementById('reg-turma').value = "";
+
+            } catch (error) {
+                console.error("Falha ao registrar aluno:", error);
+                statusMsg.textContent = `Erro: ${error.message}`; // Ex: "Email ou Matrícula já cadastrado."
+                statusMsg.className = "error";
+            }
+        });
+        
+        // --- CARREGA AS TURMAS QUANDO A PÁGINA ABRE ---
+        document.addEventListener('DOMContentLoaded', carregarTurmas);
+    </script>
+</body>
+</html>

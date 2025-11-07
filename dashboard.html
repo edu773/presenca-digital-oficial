@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Presença Digital</title>
+    <style>
+        /* (Seu CSS está perfeito, permanece o mesmo) */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; padding-top: 40px; margin: 0; padding-bottom: 40px; }
+        .app-container { width: 90%; max-width: 600px; background-color: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; box-sizing: border-box; }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
+        select { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+        select:disabled { background-color: #eee; } /* [NOVO] Estilo para dropdown desabilitado */
+        
+        /* Navegação */
+        nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        nav a { text-decoration: none; color: #007bff; font-weight: 600; font-size: 0.9em; }
+        #btn-logout { background-color: transparent; color: #dc3545; padding: 4px 8px; font-size: 0.9em; width: auto; border: 1px solid #dc3545; }
+        #btn-logout:hover { background-color: #dc3545; color: white; }
+        
+        /* Tabela */
+        #report-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        #report-table th, #report-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        #report-table th { background-color: #f9f9f9; font-weight: 700; }
+        #report-output { margin-top: 20px; }
+        #status-message { font-weight: 600; color: #777; }
+        
+        /* Divisor (removido, pois o formulário de registro saiu) */
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <nav id="main-nav">
+            </nav>
+        
+        <h2>Relatório de Presença</h2>
+        
+        <div id="admin-filters" style="display:none;">
+            <div class="form-group">
+                <label for="select-turma">Selecione uma Turma:</label>
+                <select id="select-turma">
+                    <option value="">Carregando...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="select-aluno">Selecione um Aluno:</label>
+                <select id="select-aluno" disabled>
+                    <option value="">(Primeiro selecione uma turma)</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="report-output">
+            <p id="status-message">Carregando...</p>
+            <table id="report-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Disciplina</th>
+                        <th>Total de Presenças</th>
+                    </tr>
+                </thead>
+                <tbody id="report-body">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // --- "PORTEIRO" DE SEGURANÇA ---
+        const authToken = localStorage.getItem('authToken');
+        const userRole = localStorage.getItem('userRole'); 
+        const userId = localStorage.getItem('userId'); 
+
+        if (!authToken) {
+            alert('Acesso negado. Por favor, faça o login.');
+            window.location.href = '/login';
+        }
+
+        // 1. Função para buscar dados (envia o token)
+        async function fetchData(endpoint) {
+            const response = await fetch(endpoint, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    alert('Sessão expirada. Faça o login novamente.');
+                    window.location.href = '/login'; 
+                }
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Erro ${response.status}`);
+            }
+            return await response.json();
+        }
+
+        // 2. Função para preencher o menu de turmas (SÓ PARA ADMINS)
+        async function carregarTurmas() {
+            try {
+                const turmas = await fetchData('/api/turmas');
+                const select = document.getElementById('select-turma');
+                select.innerHTML = '<option value="">Selecione uma turma</option>';
+                
+                for (const turma of turmas) {
+                    const option = document.createElement('option');
+                    option.value = turma.id;
+                    option.textContent = turma.nome;
+                    select.appendChild(option);
+                }
+            } catch (error) {
+                console.error("Falha ao carregar turmas:", error);
+                document.getElementById('status-message').textContent = "Erro ao carregar lista de turmas.";
+            }
+        }
+
+        // 3. Função para carregar alunos FILTRADOS (SÓ PARA ADMINS)
+        async function carregarAlunosFiltrados(turmaId) {
+            const selectAluno = document.getElementById('select-aluno');
+            
+            if (!turmaId) {
+                selectAluno.innerHTML = '<option value="">(Primeiro selecione uma turma)</option>';
+                selectAluno.disabled = true;
+                return;
+            }
+            
+            selectAluno.innerHTML = '<option value="">Carregando alunos...</option>';
+            selectAluno.disabled = false;
+            
+            try {
+                // Chama a API com o filtro: /api/alunos?turma_id=1
+                const alunos = await fetchData(`/api/alunos?turma_id=${turmaId}`);
+                
+                selectAluno.innerHTML = '<option value="">Selecione um aluno</option>';
+                
+                if (alunos.length === 0) {
+                     selectAluno.innerHTML = '<option value="">(Nenhum aluno nesta turma)</option>';
+                }
+                
+                for (const aluno of alunos) {
+                    const option = document.createElement('option');
+                    option.value = aluno.id;
+                    option.textContent = aluno.nome;
+                    selectAluno.appendChild(option);
+                }
+            } catch (error) {
+                console.error("Falha ao carregar alunos:", error);
+                selectAluno.innerHTML = '<option value="">(Erro ao carregar)</option>';
+            }
+        }
+
+        // 4. Função para buscar e exibir o relatório
+        async function buscarRelatorio(alunoId) {
+            // ... (Esta função permanece 100% igual) ...
+            const statusMsg = document.getElementById('status-message');
+            const table = document.getElementById('report-table');
+            const tableBody = document.getElementById('report-body');
+
+            tableBody.innerHTML = '';
+            table.style.display = 'none';
+            
+            if (!alunoId) {
+                statusMsg.textContent = "Selecione um aluno para ver o relatório.";
+                statusMsg.style.display = 'block';
+                return;
+            }
+
+            statusMsg.textContent = "Buscando relatório...";
+
+            try {
+                const relatorio = await fetchData(`/api/relatorio/aluno/${alunoId}`);
+                if (relatorio.length === 0) {
+                    statusMsg.textContent = "Nenhum registro de presença encontrado para este aluno.";
+                    statusMsg.style.display = 'block';
+                    return;
+                }
+                for (const item of relatorio) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td>${item.disciplina}</td><td>${item.total_de_presencas}</td>`;
+                    tableBody.appendChild(row);
+                }
+                statusMsg.style.display = 'none'; 
+                table.style.display = 'table'; 
+            } catch (error) {
+                console.error("Falha ao buscar relatório:", error);
+                statusMsg.textContent = `Erro ao buscar relatório: ${error.message}`;
+                statusMsg.style.display = 'block';
+            }
+        }
+
+        // 5. Funções principais (Controlador de Página):
+        document.addEventListener('DOMContentLoaded', () => {
+            const nav = document.getElementById('main-nav');
+            
+            // Cria o botão de Logout
+            const logoutButton = document.createElement('button');
+            logoutButton.id = 'btn-logout';
+            logoutButton.textContent = 'Sair';
+            logoutButton.addEventListener('click', () => {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('userRole');
+                localStorage.removeItem('userId'); 
+                window.location.href = '/login';
+            });
+
+            // [LÓGICA DE PAPEL (ROLE)]
+            if (userRole === 'admin' || userRole === 'Docente') {
+                // --- É um ADMIN ---
+                
+                // 1. Mostra o link "Voltar ao Menu"
+                const backLink = document.createElement('a');
+                backLink.href = '/admin-hub';
+                backLink.textContent = '← Voltar ao Menu';
+                nav.appendChild(backLink);
+                nav.appendChild(logoutButton);
+                
+                // 2. Mostra os filtros de Admin
+                document.getElementById('admin-filters').style.display = 'block';
+                
+                // 3. Carrega a lista de *Turmas*
+                carregarTurmas();
+                
+                // 4. [NOVO] Adiciona "ouvinte" ao dropdown de TURMAS
+                //    (Quando o admin escolhe uma turma, carregamos os alunos)
+                document.getElementById('select-turma').addEventListener('change', (e) => {
+                    carregarAlunosFiltrados(e.target.value);
+                    buscarRelatorio(null); // Limpa o relatório antigo
+                });
+                
+                // 5. Adiciona "ouvinte" ao dropdown de ALUNOS
+                //    (Quando o admin escolhe um aluno, buscamos o relatório)
+                document.getElementById('select-aluno').addEventListener('change', (e) => {
+                    buscarRelatorio(e.target.value);
+                });
+                
+                // 6. Limpa a mensagem de status inicial
+                document.getElementById('status-message').textContent = "Selecione uma turma e um aluno.";
+
+            } else if (userRole === 'aluno') {
+                // --- É um ALUNO ---
+                
+                // 1. Mostra "Meu Relatório"
+                const title = document.createElement('span');
+                title.textContent = "Meu Relatório";
+                title.style.fontWeight = '600';
+                nav.appendChild(title);
+                nav.appendChild(logoutButton);
+                
+                // 2. Busca o relatório *do próprio aluno*
+                if (!userId) {
+                     document.getElementById('status-message').textContent = "Erro: ID do aluno não encontrado no login.";
+                } else {
+                     buscarRelatorio(userId);
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Presença Digital</title>
+    <style>
+        /* (Seu CSS está perfeito, permanece o mesmo) */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .app-container { width: 90%; max-width: 400px; background-color: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; box-sizing: border-box; }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
+        input, button { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+        input[type="email"], input[type="password"] { margin-bottom: 10px; }
+        button { background-color: #007bff; color: white; font-weight: 700; border: none; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        #status-message { text-align: center; margin-top: 16px; font-weight: 600; color: red; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <h2>Login - Presença Digital</h2>
+        
+        <form id="login-form">
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Senha:</label>
+                <input type="password" id="password" required>
+            </div>
+
+            <button type="submit">Entrar</button>
+            <div id="status-message"></div>
+        </form>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('login-form');
+        const statusMsg = document.getElementById('status-message');
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); 
+            statusMsg.textContent = "Verificando...";
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            let loginUrl = '/api/login/aluno';
+            if (email.includes('admin') || email.includes('docente')) {
+                loginUrl = '/api/login/admin';
+            }
+
+            try {
+                const response = await fetch(loginUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email: email, password: password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Erro desconhecido');
+                }
+
+                // 5. SUCESSO! Salva o token, o papel E O ID DO USUÁRIO
+                localStorage.setItem('authToken', data.token);
+                localStorage.setItem('userRole', data.role);
+                localStorage.setItem('userId', data.userId); 
+
+                statusMsg.textContent = "Sucesso! Redirecionando...";
+                statusMsg.style.color = "green";
+
+                // 6. Redireciona com base no papel
+                if (data.role === 'admin' || data.role === 'Docente') {
+                    window.location.href = '/admin-hub'; 
+                } else {
+                    window.location.href = '/dashboard';
+                }
+
+            } catch (error) {
+                console.error("Falha no login:", error);
+                statusMsg.textContent = error.message; 
+                statusMsg.style.color = "red";
+            }
+        });
+    </script>
+</body>
+</html>

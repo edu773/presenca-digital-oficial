@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Aulas - Presença Digital</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; padding-top: 40px; margin: 0; padding-bottom: 40px; }
+        .app-container { width: 90%; max-width: 800px; background-color: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; box-sizing: border-box; }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        
+        /* Navegação */
+        nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        nav a { text-decoration: none; color: #007bff; font-weight: 600; font-size: 0.9em; }
+        #btn-logout { background-color: transparent; color: #dc3545; padding: 4px 8px; font-size: 0.9em; width: auto; border: 1px solid #dc3545; }
+        #btn-logout:hover { background-color: #dc3545; color: white; }
+
+        /* Lista de Eventos */
+        #status-message { font-weight: 600; color: #777; text-align: center; }
+        .event-list { list-style: none; padding: 0; }
+        .event-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .event-info {
+            font-size: 0.9em;
+            color: #333;
+        }
+        .event-info strong {
+            font-size: 1.1em;
+            color: #000;
+            display: block;
+        }
+        .event-item button {
+            background-color: #ffc107;
+            color: #212529;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .event-item button:hover {
+            background-color: #e0a800;
+        }
+        .event-item button.disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <nav>
+            <a href="/admin-hub">&larr; Voltar ao Menu</a>
+            <button id="btn-logout">Sair</button>
+        </nav>
+        
+        <h2>Gerenciar Aulas Ativas</h2>
+        <p id="status-message">Carregando aulas recentes...</p>
+        
+        <ul id="event-list" class="event-list">
+            </ul>
+    </div>
+
+    <script>
+        // --- "PORTEIRO" DE SEGURANÇA ---
+        const authToken = localStorage.getItem('authToken');
+        const userRole = localStorage.getItem('userRole');
+
+        if (!authToken || (userRole !== 'admin' && userRole !== 'Docente')) {
+            alert('Acesso negado. Por favor, faça o login como admin.');
+            window.location.href = '/login';
+        }
+
+        // --- FUNÇÃO DE LOGOUT ---
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userRole');
+            localStorage.removeItem('userId'); 
+            window.location.href = '/login';
+        });
+
+        // --- LÓGICA DA PÁGINA ---
+        const statusMsg = document.getElementById('status-message');
+        const eventList = document.getElementById('event-list');
+
+        // Função para formatar a data (para ficar legível)
+        function formatarData(dataISO) {
+            const data = new Date(dataISO);
+            return data.toLocaleString('pt-BR', { timeStyle: 'short', dateStyle: 'short' });
+        }
+
+        // Função para buscar dados
+        async function fetchData(endpoint, options = {}) {
+            const fetchOptions = {
+                method: options.method || 'GET',
+                headers: { 'Authorization': `Bearer ${authToken}`, ...options.headers },
+                body: options.body
+            };
+            const response = await fetch(endpoint, fetchOptions);
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    alert('Sessão expirada ou sem permissão. Faça o login novamente.');
+                    window.location.href = '/login'; 
+                }
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Erro ${response.status}`);
+            }
+            return response.json();
+        }
+
+        // Função para carregar e exibir os eventos
+        async function carregarEventos() {
+            try {
+                // 1. Chama a nova API GET /api/eventos/recentes
+                const eventos = await fetchData('/api/eventos/recentes');
+                
+                eventList.innerHTML = ''; // Limpa a lista
+                
+                if (eventos.length === 0) {
+                    statusMsg.textContent = "Nenhuma aula ativa ou recente encontrada.";
+                    return;
+                }
+                
+                statusMsg.style.display = 'none'; // Esconde o "Carregando..."
+
+                // 2. Cria os itens da lista
+                eventos.forEach(evento => {
+                    const item = document.createElement('li');
+                    item.className = 'event-item';
+                    
+                    const agora = new Date();
+                    const dataFim = new Date(evento.fim);
+                    const aulaJaTerminou = agora > dataFim;
+
+                    item.innerHTML = `
+                        <div class="event-info">
+                            <strong>${evento.disciplina} (Turma: ${evento.turma})</strong>
+                            Sala: ${evento.sala} | Prof.: ${evento.professor} <br>
+                            Início: ${formatarData(evento.inicio)} | Fim: ${formatarData(evento.fim)}
+                        </div>
+                        <button 
+                            class="btn-cancelar ${aulaJaTerminou ? 'disabled' : ''}" 
+                            data-id="${evento.id}"
+                            ${aulaJaTerminou ? 'disabled' : ''}
+                        >
+                            ${aulaJaTerminou ? 'Encerrada' : 'Encerrar Aula'}
+                        </button>
+                    `;
+                    eventList.appendChild(item);
+                });
+
+            } catch (error) {
+                console.error("Falha ao carregar eventos:", error);
+                statusMsg.textContent = `Erro ao carregar eventos: ${error.message}`;
+            }
+        }
+
+        // "Ouvinte" para os botões "Encerrar Aula"
+        eventList.addEventListener('click', async (e) => {
+            // Verifica se o clique foi em um botão de cancelar
+            if (e.target.classList.contains('btn-cancelar') && !e.target.disabled) {
+                const eventoId = e.target.dataset.id;
+                
+                if (!confirm(`Tem certeza que deseja encerrar a aula ID ${eventoId} agora?`)) {
+                    return;
+                }
+                
+                try {
+                    // 3. Chama a nova API PUT /api/eventos/cancelar/:id
+                    e.target.textContent = 'Encerrando...';
+                    e.target.disabled = true;
+
+                    await fetchData(`/api/eventos/cancelar/${eventoId}`, {
+                        method: 'PUT'
+                    });
+                    
+                    // Sucesso! Recarrega a lista para mostrar a mudança
+                    await carregarEventos();
+                    
+                } catch (error) {
+                    console.error("Falha ao cancelar evento:", error);
+                    alert(`Erro ao encerrar aula: ${error.message}`);
+                    e.target.textContent = 'Encerrar Aula';
+                    e.target.disabled = false;
+                }
+            }
+        });
+
+        // Carrega os eventos assim que a página abre
+        document.addEventListener('DOMContentLoaded', carregarEventos);
+    </script>
+</body>
+</html>
