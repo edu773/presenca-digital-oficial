@@ -2,7 +2,7 @@
 
 const { Pool } = require('pg');
 
-// A variável 'process.env.DATABASE_URL' será injetada ANTES que este arquivo rode.
+// A variável 'process.env.DATABASE_URL' injetada
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
